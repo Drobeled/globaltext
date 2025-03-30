@@ -81,12 +81,16 @@
             margin-top: 10px;
             font-size: 14px;
         }
+        .loading {
+            color: #aaa;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
     <h1>Пиши сюда че хочешь</h1>
     <div class="current-text-label">Последний текст:</div>
-    <div id="currentText">Загрузка...</div>
+    <div id="currentText" class="loading">Загрузка данных...</div>
     
     <textarea id="editableText" placeholder="пиши сюда"></textarea>
     <div>
@@ -102,4 +106,139 @@
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
+    
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnpLtf8-ssHkQXduqs7855MAjhnnGhsss",
+            authDomain: "textglobalinput.firebaseapp.com",
+            databaseURL: "https://textglobalinput-default-rtdb.firebaseio.com",
+            projectId: "textglobalinput",
+            storageBucket: "textglobalinput.appspot.com",
+            messagingSenderId: "311467284060",
+            appId: "1:311467284060:web:2346ab22fe8dc8ad803899"
+        };
+
+        const app = firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        let lastSubmissionTime = 0;
+        const COOLDOWN = 5 * 60 * 1000;
+
+        function updateTimer() {
+            const now = Date.now();
+            const remaining = COOLDOWN - (now - lastSubmissionTime);
+            
+            if (remaining > 0) {
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+                document.getElementById('timer').textContent = `Следующая отправка через: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                document.querySelector('button').disabled = true;
+            } else {
+                document.getElementById('timer').textContent = '';
+                document.querySelector('button').disabled = false;
+            }
+        }
+
+        function initDatabase() {
+            const textRef = database.ref('text');
+            const historyRef = database.ref('history').limitToLast(4);
+            
+            textRef.on('value', (snapshot) => {
+                const text = snapshot.val();
+                if (text !== null) {
+                    document.getElementById('currentText').textContent = text;
+                    document.getElementById('currentText').classList.remove('loading');
+                } else {
+                    document.getElementById('currentText').textContent = "Пока здесь пусто...";
+                    document.getElementById('currentText').classList.remove('loading');
+                }
+            }, (error) => {
+                console.error("Ошибка загрузки текста:", error);
+                document.getElementById('currentText').textContent = "Ошибка загрузки";
+                document.getElementById('currentText').classList.remove('loading');
+            });
+
+            historyRef.on('value', (snapshot) => {
+                const history = snapshot.val() || {};
+                const historyList = document.getElementById('historyList');
+                historyList.innerHTML = '';
+                
+                const historyArray = Object.entries(history).map(([key, value]) => ({
+                    id: key,
+                    ...value
+                })).sort((a, b) => b.timestamp - a.timestamp);
+                
+                historyArray.forEach(item => {
+                    const li = document.createElement('li');
+                    const date = new Date(item.timestamp);
+                    const time = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+                    li.textContent = `[${time}] ${item.user}: изменил текст`;
+                    historyList.appendChild(li);
+                });
+            }, (error) => {
+                console.error("Ошибка загрузки истории:", error);
+            });
+        }
+
+        document.getElementById('editableText').addEventListener('focus', function() {
+            if (this.value === "пиши сюда") {
+                this.value = '';
+            }
+        });
+
+        document.getElementById('editableText').addEventListener('blur', function() {
+            if (this.value === '') {
+                this.value = "пиши сюда";
+            }
+        });
+
+        async function saveText() {
+            const now = Date.now();
+            if (now - lastSubmissionTime < COOLDOWN) {
+                alert(`Подождите ${Math.ceil((COOLDOWN - (now - lastSubmissionTime))/60000)} минут перед следующей отправкой`);
+                return;
+            }
+
+            const text = document.getElementById('editableText').value;
+            const user = document.getElementById('userName').value.trim();
+            
+            if (!user) {
+                document.getElementById('nameError').textContent = "Пожалуйста, введите ваше имя!";
+                return;
+            }
+            
+            if (user.length > 20) {
+                document.getElementById('nameError').textContent = "Имя не должно превышать 20 символов!";
+                return;
+            }
+            
+            document.getElementById('nameError').textContent = "";
+            
+            try {
+                lastSubmissionTime = now;
+                updateTimer();
+
+                await database.ref('text').set(text);
+                
+                const newHistoryEntry = {
+                    user: user,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    text: text
+                };
+                
+                const newHistoryRef = database.ref('history').push();
+                await newHistoryRef.set(newHistoryEntry);
+                
+                document.getElementById('editableText').value = "";
+                alert("Текст успешно сохранён!");
+            } catch (error) {
+                console.error("Ошибка сохранения:", error);
+                alert("Ошибка при сохранении текста");
+            }
+        }
+
+        setInterval(updateTimer, 1000);
+        initDatabase();
+    </script>
+</body>
+</html>
