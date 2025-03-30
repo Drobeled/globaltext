@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Глобальный текстовый редактор</title>
+    <title>Пиши сюда че хочешь</title>
     <style>
         body {
             background-color: #1a3a32;
@@ -12,6 +12,13 @@
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
+        }
+        #currentText {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            min-height: 50px;
         }
         #editableText {
             width: 100%;
@@ -55,16 +62,23 @@
             color: #d0b0ff;
             text-align: center;
         }
+        .error {
+            color: #ff6b6b;
+            font-size: 14px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
-    <h1>🌍 Глобальный текстовый редактор</h1>
+    <h1>Пиши сюда че хочешь</h1>
+    <div id="currentText">Загрузка...</div>
     
-    <textarea id="editableText" placeholder="Введите текст здесь..."></textarea>
+    <textarea id="editableText" placeholder="Напишите что-нибудь..."></textarea>
     <div>
-        <input type="text" id="userName" placeholder="Ваше имя" required>
-        <button onclick="saveText()">💾 Сохранить</button>
+        <input type="text" id="userName" placeholder="Ваше имя (макс. 20 символов)" required maxlength="20">
+        <button onclick="saveText()">💾 Отправить</button>
     </div>
+    <div id="nameError" class="error"></div>
     
     <div id="history">
         <h3>Последние изменения:</h3>
@@ -93,7 +107,9 @@
 
         // Загрузка текущего текста
         database.ref('content/text').on('value', (snapshot) => {
-            document.getElementById('editableText').value = snapshot.val() || "Пока здесь пусто...";
+            const text = snapshot.val() || "Пока здесь пусто...";
+            document.getElementById('editableText').value = text;
+            document.getElementById('currentText').textContent = text;
         });
 
         // Загрузка истории изменений (последние 4)
@@ -121,11 +137,20 @@
         async function saveText() {
             const text = document.getElementById('editableText').value;
             const user = document.getElementById('userName').value.trim();
+            const errorElement = document.getElementById('nameError');
             
+            // Валидация имени
             if (!user) {
-                alert("Пожалуйста, введите ваше имя!");
+                errorElement.textContent = "Пожалуйста, введите ваше имя!";
                 return;
             }
+            
+            if (user.length > 20) {
+                errorElement.textContent = "Имя не должно превышать 20 символов!";
+                return;
+            }
+            
+            errorElement.textContent = "";
             
             // Получаем текущую историю
             const historyRef = database.ref('content/history');
