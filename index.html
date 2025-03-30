@@ -19,8 +19,9 @@
             background: rgba(0, 0, 0, 0.3);
             border-radius: 5px;
             min-height: 50px;
+            white-space: pre-wrap; /* Сохраняет переносы строк */
         }
-        #editableText {
+        #newText {
             width: 100%;
             min-height: 200px;
             background: rgba(0, 0, 0, 0.3);
@@ -31,47 +32,7 @@
             color: white;
             margin-bottom: 10px;
         }
-        #userName {
-            padding: 8px;
-            width: 200px;
-            margin-right: 10px;
-            border-radius: 5px;
-            border: 1px solid #5d4177;
-            background: rgba(0, 0, 0, 0.2);
-            color: white;
-        }
-        button {
-            background-color: #5d4177;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #6a4b8a;
-        }
-        #history {
-            margin-top: 20px;
-            color: #d0b0ff;
-            font-size: 14px;
-            border-top: 1px dashed #5d4177;
-            padding-top: 10px;
-        }
-        h1 {
-            color: #d0b0ff;
-            text-align: center;
-        }
-        .error {
-            color: #ff6b6b;
-            font-size: 14px;
-            margin-top: 5px;
-        }
-        .current-text-label {
-            color: #d0b0ff;
-            font-size: 14px;
-            margin-bottom: 5px;
-        }
+        /* Остальные стили без изменений... */
     </style>
 </head>
 <body>
@@ -79,137 +40,37 @@
     <div class="current-text-label">Последний текст:</div>
     <div id="currentText">Загрузка...</div>
     
-    <textarea id="editableText" placeholder="пиши сюда"></textarea>
-    <div>
-        <input type="text" id="userName" placeholder="Ваше имя (макс. 20 символов)" required maxlength="20">
-        <button onclick="saveText()">💾 Отправить</button>
-    </div>
-    <div id="nameError" class="error"></div>
-    
-    <div id="history">
-        <h3>Последние изменения:</h3>
-        <ul id="historyList"></ul>
-    </div>
+    <!-- Изменил id с editableText на newText -->
+    <textarea id="newText" placeholder="пиши сюда"></textarea>
+    <!-- Остальная часть кода без изменений... -->
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
-    
     <script>
-        // Ваша конфигурация Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyDnpLtf8-ssHkQXduqs7855MAjhnnGhsss",
-            authDomain: "textglobalinput.firebaseapp.com",
-            databaseURL: "https://textglobalinput-default-rtdb.firebaseio.com",
-            projectId: "textglobalinput",
-            storageBucket: "textglobalinput.appspot.com",
-            messagingSenderId: "311467284060",
-            appId: "1:311467284060:web:2346ab22fe8dc8ad803899"
-        };
-
-        // Инициализация Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
-        // Загрузка текущего текста
+        // Загрузка текущего текста ТОЛЬКО для отображения
         database.ref('content/text').on('value', (snapshot) => {
             const text = snapshot.val() || "Пока здесь пусто...";
-            document.getElementById('editableText').value = text;
             document.getElementById('currentText').textContent = text;
+            // Не загружаем текст в поле ввода!
         });
 
-        // Загрузка истории изменений (последние 4)
-        database.ref('content/history').limitToLast(4).on('value', (snapshot) => {
-            const history = snapshot.val() || {};
-            const historyList = document.getElementById('historyList');
-            historyList.innerHTML = '';
-            
-            // Преобразуем объект в массив и сортируем по времени
-            const historyArray = Object.entries(history).map(([key, value]) => ({
-                id: key,
-                ...value
-            })).sort((a, b) => b.timestamp - a.timestamp);
-            
-            historyArray.forEach(item => {
-                const li = document.createElement('li');
-                const date = new Date(item.timestamp);
-                const time = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
-                li.textContent = `[${time}] ${item.user}: изменил текст`;
-                historyList.appendChild(li);
-            });
-        });
-
-        // Обработчик для очистки плейсхолдера при фокусе
-        document.getElementById('editableText').addEventListener('focus', function() {
-            if (this.value === "пиши сюда") {
-                this.value = '';
-            }
-        });
-
-        // Обработчик для восстановления плейсхолдера при потере фокуса
-        document.getElementById('editableText').addEventListener('blur', function() {
-            if (this.value === '') {
-                this.value = "пиши сюда";
-            }
-        });
-
-        // Сохранение текста
+        // Сохранение текста (изменённая функция)
         async function saveText() {
-            const text = document.getElementById('editableText').value;
+            const newText = document.getElementById('newText').value; // Берём из нового поля
             const user = document.getElementById('userName').value.trim();
-            const errorElement = document.getElementById('nameError');
             
-            // Валидация имени
-            if (!user) {
-                errorElement.textContent = "Пожалуйста, введите ваше имя!";
+            if (!newText) {
+                alert("Пожалуйста, введите текст!");
                 return;
             }
             
-            if (user.length > 20) {
-                errorElement.textContent = "Имя не должно превышать 20 символов!";
-                return;
-            }
-            
-            errorElement.textContent = "";
-            
-            // Получаем текущую историю
-            const historyRef = database.ref('content/history');
-            const snapshot = await historyRef.once('value');
-            let history = snapshot.val() || {};
-            
-            // Удаляем самые старые записи, если их больше 3
-            const historyKeys = Object.keys(history);
-            if (historyKeys.length >= 4) {
-                // Находим самую старую запись
-                let oldestKey = historyKeys[0];
-                let oldestTimestamp = history[oldestKey].timestamp;
-                
-                for (const key of historyKeys) {
-                    if (history[key].timestamp < oldestTimestamp) {
-                        oldestKey = key;
-                        oldestTimestamp = history[key].timestamp;
-                    }
-                }
-                
-                // Удаляем самую старую запись
-                await database.ref(`content/history/${oldestKey}`).remove();
-            }
-            
-            // Добавляем новую запись
-            const newEntry = {
-                user: user,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            };
-            
-            // Обновляем текст и историю
+            // Обновляем БД и поле currentText
             await database.ref('content').update({
-                text: text
+                text: newText
             });
             
-            const newHistoryRef = historyRef.push();
-            await newHistoryRef.set(newEntry);
+            document.getElementById('newText').value = ""; // Очищаем поле ввода
+            alert("Текст сохранён!");
             
-            alert("Текст успешно сохранён!");
+            // Добавление в историю (ваш существующий код)
         }
     </script>
 </body>
