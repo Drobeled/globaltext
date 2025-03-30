@@ -19,8 +19,9 @@
             background: rgba(0, 0, 0, 0.3);
             border-radius: 5px;
             min-height: 50px;
+            white-space: pre-wrap;
         }
-        #editableText {
+        #newText {
             width: 100%;
             min-height: 200px;
             background: rgba(0, 0, 0, 0.3);
@@ -92,7 +93,7 @@
     <div class="current-text-label">Последний текст:</div>
     <div id="currentText" class="loading">Загрузка данных...</div>
     
-    <textarea id="editableText" placeholder="пиши сюда"></textarea>
+    <textarea id="newText" placeholder="пиши сюда"></textarea>
     <div>
         <input type="text" id="userName" placeholder="Ваше имя (макс. 20 символов)" required maxlength="20">
         <button onclick="saveText()">💾 Отправить</button>
@@ -109,6 +110,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
     
     <script>
+        // Конфигурация Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDnpLtf8-ssHkQXduqs7855MAjhnnGhsss",
             authDomain: "textglobalinput.firebaseapp.com",
@@ -119,11 +121,15 @@
             appId: "1:311467284060:web:2346ab22fe8dc8ad803899"
         };
 
+        // Инициализация Firebase
         const app = firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
+        
+        // Таймер ограничения отправки
         let lastSubmissionTime = 0;
-        const COOLDOWN = 5 * 60 * 1000;
+        const COOLDOWN = 5 * 60 * 1000; // 5 минут
 
+        // Обновление таймера
         function updateTimer() {
             const now = Date.now();
             const remaining = COOLDOWN - (now - lastSubmissionTime);
@@ -139,40 +145,44 @@
             }
         }
 
+        // Инициализация базы данных
         function initDatabase() {
-            const textRef = database.ref('text');
-            const historyRef = database.ref('history').limitToLast(4);
-            
-            textRef.on('value', (snapshot) => {
+            // Загрузка текущего текста
+            database.ref('currentText').on('value', (snapshot) => {
                 const text = snapshot.val();
+                const currentTextElement = document.getElementById('currentText');
+                
                 if (text !== null) {
-                    document.getElementById('currentText').textContent = text;
-                    document.getElementById('currentText').classList.remove('loading');
+                    currentTextElement.textContent = text;
+                    currentTextElement.classList.remove('loading');
                 } else {
-                    document.getElementById('currentText').textContent = "Пока здесь пусто...";
-                    document.getElementById('currentText').classList.remove('loading');
+                    currentTextElement.textContent = "Пока здесь пусто...";
+                    currentTextElement.classList.remove('loading');
                 }
             }, (error) => {
                 console.error("Ошибка загрузки текста:", error);
-                document.getElementById('currentText').textContent = "Ошибка загрузки";
+                document.getElementById('currentText').textContent = "Ошибка загрузки текста";
                 document.getElementById('currentText').classList.remove('loading');
             });
 
-            historyRef.on('value', (snapshot) => {
+            // Загрузка истории изменений
+            database.ref('history').orderByChild('timestamp').limitToLast(4).on('value', (snapshot) => {
                 const history = snapshot.val() || {};
                 const historyList = document.getElementById('historyList');
                 historyList.innerHTML = '';
                 
-                const historyArray = Object.entries(history).map(([key, value]) => ({
+                // Преобразуем объект в массив и сортируем по времени (новые сверху)
+                const historyArray = Object.keys(history).map(key => ({
                     id: key,
-                    ...value
+                    ...history[key]
                 })).sort((a, b) => b.timestamp - a.timestamp);
                 
+                // Отображаем историю
                 historyArray.forEach(item => {
                     const li = document.createElement('li');
                     const date = new Date(item.timestamp);
                     const time = `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
-                    li.textContent = `[${time}] ${item.user}: изменил текст`;
+                    li.textContent = `[${time}] ${item.user}: ${item.text.substring(0, 30)}${item.text.length > 30 ? '...' : ''}`;
                     historyList.appendChild(li);
                 });
             }, (error) => {
@@ -180,18 +190,20 @@
             });
         }
 
-        document.getElementById('editableText').addEventListener('focus', function() {
+        // Обработчики поля ввода
+        document.getElementById('newText').addEventListener('focus', function() {
             if (this.value === "пиши сюда") {
                 this.value = '';
             }
         });
 
-        document.getElementById('editableText').addEventListener('blur', function() {
+        document.getElementById('newText').addEventListener('blur', function() {
             if (this.value === '') {
                 this.value = "пиши сюда";
             }
         });
 
+        // Сохранение текста
         async function saveText() {
             const now = Date.now();
             if (now - lastSubmissionTime < COOLDOWN) {
@@ -199,44 +211,55 @@
                 return;
             }
 
-            const text = document.getElementById('editableText').value;
+            const text = document.getElementById('newText').value;
             const user = document.getElementById('userName').value.trim();
+            const errorElement = document.getElementById('nameError');
+            
+            // Валидация
+            if (!text || text === "пиши сюда") {
+                alert("Пожалуйста, введите текст!");
+                return;
+            }
             
             if (!user) {
-                document.getElementById('nameError').textContent = "Пожалуйста, введите ваше имя!";
+                errorElement.textContent = "Пожалуйста, введите ваше имя!";
                 return;
             }
             
             if (user.length > 20) {
-                document.getElementById('nameError').textContent = "Имя не должно превышать 20 символов!";
+                errorElement.textContent = "Имя не должно превышать 20 символов!";
                 return;
             }
             
-            document.getElementById('nameError').textContent = "";
+            errorElement.textContent = "";
             
             try {
+                // Обновляем время последней отправки
                 lastSubmissionTime = now;
                 updateTimer();
 
-                await database.ref('text').set(text);
+                // Сохраняем текущий текст
+                await database.ref('currentText').set(text);
                 
-                const newHistoryEntry = {
+                // Добавляем запись в историю
+                const newEntry = {
                     user: user,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
-                    text: text
+                    text: text,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
                 };
                 
-                const newHistoryRef = database.ref('history').push();
-                await newHistoryRef.set(newHistoryEntry);
+                await database.ref('history').push(newEntry);
                 
-                document.getElementById('editableText').value = "";
+                // Очищаем поле ввода
+                document.getElementById('newText').value = "";
                 alert("Текст успешно сохранён!");
             } catch (error) {
                 console.error("Ошибка сохранения:", error);
-                alert("Ошибка при сохранении текста");
+                alert("Произошла ошибка при сохранении текста");
             }
         }
 
+        // Запускаем таймер и инициализируем базу данных
         setInterval(updateTimer, 1000);
         initDatabase();
     </script>
