@@ -67,13 +67,19 @@
             font-size: 14px;
             margin-top: 5px;
         }
+        .current-text-label {
+            color: #d0b0ff;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
     <h1>Пиши сюда че хочешь</h1>
+    <div class="current-text-label">Последний текст:</div>
     <div id="currentText">Загрузка...</div>
     
-    <textarea id="editableText" placeholder="Напишите что-нибудь..."></textarea>
+    <textarea id="editableText" placeholder="пиши сюда"></textarea>
     <div>
         <input type="text" id="userName" placeholder="Ваше имя (макс. 20 символов)" required maxlength="20">
         <button onclick="saveText()">💾 Отправить</button>
@@ -131,6 +137,20 @@
                 li.textContent = `[${time}] ${item.user}: изменил текст`;
                 historyList.appendChild(li);
             });
+        });
+
+        // Обработчик для очистки плейсхолдера при фокусе
+        document.getElementById('editableText').addEventListener('focus', function() {
+            if (this.value === "пиши сюда") {
+                this.value = '';
+            }
+        });
+
+        // Обработчик для восстановления плейсхолдера при потере фокуса
+        document.getElementById('editableText').addEventListener('blur', function() {
+            if (this.value === '') {
+                this.value = "пиши сюда";
+            }
         });
 
         // Сохранение текста
